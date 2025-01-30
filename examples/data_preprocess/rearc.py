@@ -1,0 +1,177 @@
+import json
+import os
+import zipfile
+import tempfile
+
+import urllib.request
+from typing import List
+import random
+import pandas as pd
+import argparse
+
+parser = argparse.ArgumentParser(description="Process and save datasets.")
+parser.add_argument(
+    "--local_dir", type=str, required=True, help="Directory to save the datasets"
+)
+parser.add_argument(
+    "--samples_per_task", type=int, default=10, help="Number of samples per task"
+)
+parser.add_argument(
+    "--num_test_samples", type=int, default=100, help="Number of test samples"
+)
+args = parser.parse_args()
+
+random.seed(42)
+
+# URL of the zip file
+url = "https://github.com/michaelhodel/re-arc/raw/refs/heads/main/re_arc.zip"
+
+# Create a temporary directory
+temp_dir = tempfile.gettempdir()
+zip_path = os.path.join(temp_dir, "re_arc.zip")
+extract_path = os.path.join(temp_dir, "re_arc")
+
+# Download the zip file if it doesn't exist
+if not os.path.exists(zip_path):
+
+    def download_progress_hook(count, block_size, total_size):
+        percent = int(count * block_size * 100 / total_size)
+        print(f"\rDownloading: {percent}%", end="")
+
+    urllib.request.urlretrieve(url, zip_path, reporthook=download_progress_hook)
+    print()  # Move to the next line after download completion
+
+# Extract the zip file if the folder doesn't exist
+if not os.path.exists(extract_path):
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall(extract_path)
+    print(f"Rearc extracted to: {extract_path}")
+
+
+def grid_to_string(grid: list) -> str:
+    return "\n".join([" ".join(map(str, row)) for row in grid])
+
+
+def task_to_text_pair(problem: dict) -> dict:
+
+    train_tasks = problem["train"]
+    test_task = problem["test"]
+
+    prompt = f"""
+A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+User: You are a bot that is very good at solving puzzles. Infer the pattern from the given input pairs and predict the output for the test input.
+Think about the reasoning process in your mind and then provide the user with the answer.
+Show your work in <think> </think> tags. Return the final answer in <answer> </answer> tags, for example:
+<answer>
+5 7 8 9
+3 2 1 4
+4 2 2 1
+9 9 3 2
+</answer>
+
+"""
+
+    prompt += "Training Examples\n"
+
+    for i, train_task in enumerate(train_tasks):
+        prompt += f"Example {i + 1}: Input\n"
+        prompt += grid_to_string(train_task["input"])
+        prompt += "\n\n"
+
+        prompt += f"Example {i + 1}: Output\n"
+        prompt += grid_to_string(train_task["output"])
+        prompt += "\n\n"
+
+    prompt += "Test Input:\n"
+    prompt += grid_to_string(test_task["input"])
+
+    prompt += "\n\nWhat is Output for the Test Input?\n"
+
+    prompt += """Assistant: Let me solve this step by step.
+<think>"""
+    return {"prompt": prompt, "answer": grid_to_string(test_task["output"])}
+
+
+# List and print all files in the tasks subdirectory
+tasks_path = os.path.join(extract_path, "re_arc", "tasks")
+json_files = []
+if os.path.exists(tasks_path):
+    for file in os.listdir(tasks_path):
+        file_path = os.path.join(tasks_path, file)
+        if os.path.isfile(file_path) and file_path.endswith(".json"):
+            json_files.append(file_path)
+else:
+    print(f"Tasks subdirectory does not exist in {extract_path}")
+
+problems = []
+
+for json_file in json_files:
+    with open(json_file, "r") as f:
+        pairs = json.load(f)
+        for _ in range(args.samples_per_task):
+            # Sample 4 random pairs
+            random.shuffle(pairs)
+            sample_pairs = pairs[:4]
+            problem = {
+                "train": sample_pairs[1:],
+                "test": sample_pairs[0],
+            }
+            problems.append(task_to_text_pair(problem))
+
+
+def convert_to_dataset(problems: List[dict], split: str) -> List[dict]:
+    data_source = "rearc"
+    dataset = []
+    for idx, problem in enumerate(problems):
+        question = problem["prompt"]
+        solution = problem["answer"]
+        data = {
+            "data_source": data_source,
+            "prompt": [
+                {
+                    "role": "user",
+                    "content": question,
+                }
+            ],
+            "ability": "pattern_recognition",
+            "reward_model": {
+                "style": "rule",
+                "ground_truth": solution,
+            },
+            "extra_info": {
+                "split": split,
+                "index": idx,
+            },
+        }
+        dataset.append(data)
+    return dataset
+
+
+# THIS IS OBVIOUSLY NOT A FAIR EVALUATION OF THE MODEL AS WE ARE SPLITTING SAMPLES WITHIN PROBLEMS.
+# That's fine though, it's just a measure, ultimately we need to run the resulting model against the eval set which I can't be bothered to load in yet.
+random.shuffle(problems)
+
+# Convert problems to dataset format
+split_index = len(problems) - args.num_test_samples
+train_problems = problems[:split_index]
+test_problems = problems[split_index:]
+
+train_dataset = convert_to_dataset(train_problems, "train")
+test_dataset = convert_to_dataset(test_problems, "test")
+
+# Save datasets to parquet files
+# Parse command line arguments
+
+
+local_dir = args.local_dir
+os.makedirs(local_dir, exist_ok=True)
+
+train_df = pd.DataFrame(train_dataset)
+test_df = pd.DataFrame(test_dataset)
+
+train_df.to_parquet(os.path.join(local_dir, "train.parquet"))
+test_df.to_parquet(os.path.join(local_dir, "test.parquet"))
+
+print(f"Number of training samples: {len(train_dataset)}")
+print(f"Number of testing samples: {len(test_dataset)}")
+print(f"Train and test datasets saved to {local_dir}")
