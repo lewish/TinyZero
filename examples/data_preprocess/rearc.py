@@ -8,6 +8,7 @@ from typing import List
 import random
 import pandas as pd
 import argparse
+import yaml
 
 parser = argparse.ArgumentParser(description="Process and save datasets.")
 parser.add_argument(
@@ -108,6 +109,9 @@ problems = []
 for json_file in json_files:
     with open(json_file, "r") as f:
         pairs = json.load(f)
+        # In order to try and keep prompt size down, let's order by the input grid size and take the bottom quartile of the pairs
+        pairs = sorted(pairs, key=lambda x: len(x["input"]) * len(x["input"][0]), reverse=False)
+        pairs = pairs[0:len(pairs) // 4]
         for _ in range(args.samples_per_task):
             # Sample 4 random pairs
             random.shuffle(pairs)
@@ -171,6 +175,16 @@ test_df = pd.DataFrame(test_dataset)
 
 train_df.to_parquet(os.path.join(local_dir, "train.parquet"))
 test_df.to_parquet(os.path.join(local_dir, "test.parquet"))
+
+# Save datasets to YAML files
+train_yaml_path = os.path.join(local_dir, "train.yaml")
+test_yaml_path = os.path.join(local_dir, "test.yaml")
+
+with open(train_yaml_path, "w") as train_yaml_file:
+    yaml.dump(train_dataset, train_yaml_file, default_flow_style=False)
+
+with open(test_yaml_path, "w") as test_yaml_file:
+    yaml.dump(test_dataset, test_yaml_file, default_flow_style=False)
 
 print(f"Number of training samples: {len(train_dataset)}")
 print(f"Number of testing samples: {len(test_dataset)}")
