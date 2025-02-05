@@ -26,6 +26,9 @@ parser.add_argument(
 parser.add_argument(
     "--output_yaml", type=bool, default=False, help="Output datasets to YAML files"
 )
+parser.add_argument(
+    "--max_prompt_size", type=int, default=8192, help="Maximum size of the prompt"
+)
 args = parser.parse_args()
 
 random.seed(42)
@@ -95,7 +98,8 @@ Show your work in <think> </think> tags. Return the final answer in <answer> </a
 barc_generations = []
 with open(data_path, "r") as f:
     for i, line in enumerate(f):
-        if i >= args.num_tasks:
+        # Sample 2x as we are going to have to filter some out later
+        if i >= args.num_tasks * 2:
             break
         barc_generations.append(json.loads(line))
 
@@ -147,7 +151,9 @@ def convert_to_dataset(problems: List[dict], split: str) -> List[dict]:
 
 # THIS IS OBVIOUSLY NOT A FAIR EVALUATION OF THE MODEL AS WE ARE SPLITTING SAMPLES WITHIN PROBLEMS.
 # That's fine though, it's just a measure, ultimately we need to run the resulting model against the eval set which I can't be bothered to load in yet.
+problems = [problem for problem in problems if len(problem["prompt"]) < args.max_prompt_size]
 random.shuffle(problems)
+problems = problems[: args.num_tasks]
 
 # Convert problems to dataset format
 split_index = len(problems) - args.num_test_samples
