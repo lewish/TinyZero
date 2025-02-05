@@ -3,6 +3,7 @@ from utils.reward_score.rearc import compute_score
 from langchain_openai import ChatOpenAI
 
 # Just a short script to get a baseline for the model and ensure it can solve at least some tasks.
+# Qwen2.5-7B-Instruct gets around 3% on BARC and 1% on REARC
 
 llm = ChatOpenAI(openai_api_base="http://127.0.0.1:1234/v1", openai_api_key="123", max_tokens=16000)
 

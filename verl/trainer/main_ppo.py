@@ -32,6 +32,8 @@ def _select_rm_score_fn(data_source):
         return countdown.compute_score
     elif "rearc" in data_source:
         return rearc.compute_score
+    elif "barc" in data_source:
+        return rearc.compute_score
     else:
         raise NotImplementedError
 
