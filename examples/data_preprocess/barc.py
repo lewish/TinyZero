@@ -15,7 +15,10 @@ parser.add_argument(
     "--local_dir", type=str, required=True, help="Directory to save the datasets"
 )
 parser.add_argument(
-    "--samples_per_task", type=int, default=10, help="Number of samples per task"
+    "--num_tasks", type=int, default=2000, help="Number of tasks sampled from the BARC dataset"
+)
+parser.add_argument(
+    "--samples_per_task", type=int, default=2, help="Number of samples per task"
 )
 parser.add_argument(
     "--num_test_samples", type=int, default=100, help="Number of test samples"
@@ -28,28 +31,21 @@ args = parser.parse_args()
 random.seed(42)
 
 # URL of the zip file
-url = "https://github.com/michaelhodel/re-arc/raw/refs/heads/main/re_arc.zip"
+url = "https://huggingface.co/datasets/barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems/resolve/main/data_100k.jsonl?download=true"
 
 # Create a temporary directory
 temp_dir = tempfile.gettempdir()
-zip_path = os.path.join(temp_dir, "re_arc.zip")
-extract_path = os.path.join(temp_dir, "re_arc")
+data_path = os.path.join(temp_dir, "barc", "data_100k.jsonl")
+os.makedirs(os.path.dirname(data_path), exist_ok=True)
 
 # Download the zip file if it doesn't exist
-if not os.path.exists(zip_path):
-
+if not os.path.exists(data_path):
     def download_progress_hook(count, block_size, total_size):
         percent = int(count * block_size * 100 / total_size)
         print(f"\rDownloading: {percent}%", end="")
 
-    urllib.request.urlretrieve(url, zip_path, reporthook=download_progress_hook)
+    urllib.request.urlretrieve(url, data_path, reporthook=download_progress_hook)
     print()  # Move to the next line after download completion
-
-# Extract the zip file if the folder doesn't exist
-if not os.path.exists(extract_path):
-    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        zip_ref.extractall(extract_path)
-    print(f"Rearc extracted to: {extract_path}")
 
 
 def grid_to_string(grid: list) -> str:
@@ -96,38 +92,33 @@ Show your work in <think> </think> tags. Return the final answer in <answer> </a
     return {"prompt": prompt, "answer": grid_to_string(test_task["output"])}
 
 
-# List and print all files in the tasks subdirectory
-tasks_path = os.path.join(extract_path, "re_arc", "tasks")
-json_files = []
-if os.path.exists(tasks_path):
-    for file in os.listdir(tasks_path):
-        file_path = os.path.join(tasks_path, file)
-        if os.path.isfile(file_path) and file_path.endswith(".json"):
-            json_files.append(file_path)
-else:
-    print(f"Tasks subdirectory does not exist in {extract_path}")
+barc_generations = []
+with open(data_path, "r") as f:
+    for i, line in enumerate(f):
+        if i >= args.num_tasks:
+            break
+        barc_generations.append(json.loads(line))
 
 problems = []
 
-for json_file in json_files:
-    with open(json_file, "r") as f:
-        pairs = json.load(f)
-        # In order to try and keep prompt size down, let's order by the input grid size and take the bottom quartile of the pairs
-        pairs = sorted(pairs, key=lambda x: len(x["input"]) * len(x["input"][0]), reverse=False)
-        pairs = pairs[0:len(pairs) // 4]
-        for _ in range(args.samples_per_task):
-            # Sample 4 random pairs
-            random.shuffle(pairs)
-            sample_pairs = pairs[:4]
-            problem = {
-                "train": sample_pairs[1:],
-                "test": sample_pairs[0],
-            }
-            problems.append(task_to_text_pair(problem))
+for row in barc_generations:
+    pairs = [{ "input": pair[0], "output": pair[1]} for pair in row["examples"]]
+    pairs = sorted(pairs, key=lambda x: len(x["input"]) * len(x["input"][0]), reverse=False)
+    # Take the smallest quartile of pairs to keep prompts small
+    pairs = pairs[0:len(pairs) // 4]
+    for _ in range(args.samples_per_task):
+        # Sample 4 random pairs
+        random.shuffle(pairs)
+        sample_pairs = pairs[:4]
+        problem = {
+            "train": sample_pairs[1:],
+            "test": sample_pairs[0],
+        }
+        problems.append(task_to_text_pair(problem))
 
 
 def convert_to_dataset(problems: List[dict], split: str) -> List[dict]:
-    data_source = "rearc"
+    data_source = "barc"
     dataset = []
     for idx, problem in enumerate(problems):
         question = problem["prompt"]
