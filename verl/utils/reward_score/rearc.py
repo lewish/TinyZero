@@ -5,11 +5,10 @@ import random
 def extract_solution(solution_str):
     """Extract the equation from the solution string."""
 
+    solution_str = solution_str.split("<think>")[-1]
+
     matches = re.findall(r"<answer>(.*?)</answer>", solution_str, re.DOTALL)
     if matches:
-        if len(matches) == 1:
-            # This is bad, as we put an example pair of answer tags in the prompt, so it means it didn't produce answer tags.
-            return None
         return matches[-1].strip()
     else:
         return None
@@ -38,6 +37,7 @@ def compute_score(
     do_print = random.randint(1, 64) == 1
 
     if do_print:
+        print(f"DEBUG---------------------------")
         print(f"Full solution string:\n{solution_str}")
         print(f"Extracted solution:\n{answer}")
         print(f"Target:\n{ground_truth}")
@@ -45,16 +45,16 @@ def compute_score(
 
     if ground_truth == answer:
         if do_print:
-            print(f"Correct answer: {answer}")
+            print(f"Correct answer!")
         return score
 
     if answer is not None and re.match(r"^(\d\s)*\d$", answer):
         if do_print:
-            print(f"Wrong answer: {answer}")
+            print(f"Wrong answer!")
         return format_score
 
     if do_print:
-        print(f"Wrong format")
+        print(f"Wrong format!")
 
     return 0
 
@@ -63,9 +63,11 @@ def compute_score(
 if __name__ == "__main__":
     solution_str = """Assistant: Let me solve this step by step.
 <answer>4</answer>
+<think>
+</think>
 <answer>
 
-1 1
+1 2
 3 4
 
 </answer>"""
