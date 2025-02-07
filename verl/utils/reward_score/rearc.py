@@ -38,10 +38,10 @@ def compute_score(
     do_print = random.randint(1, 64) == 1
 
     if do_print:
-        print(f"--------------------------------")
+        print(f"Full solution string:\n{solution_str}")
+        print(f"Extracted solution:\n{answer}")
         print(f"Target:\n{ground_truth}")
-        print(f"Extracted solution: {answer}")
-        print(f"Full solution string: {solution_str}")
+        print(f"--------------------------------")
 
     if ground_truth == answer:
         if do_print:
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 <answer>4</answer>
 <answer>
 
-1 2
+1 1
 3 4
 
 </answer>"""
