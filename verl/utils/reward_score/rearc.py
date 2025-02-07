@@ -34,7 +34,7 @@ def compute_score(
     if ground_truth:
         ground_truth = ground_truth.strip()
 
-    do_print = random.randint(1, 64) == 1
+    do_print = random.randint(1, 16) == 1
 
     if do_print:
         print(f"DEBUG---------------------------")
