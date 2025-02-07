@@ -4,13 +4,15 @@ import random
 
 def extract_solution(solution_str):
     """Extract the equation from the solution string."""
-    
-    matches = re.findall(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
+
+    matches = re.findall(r"<answer>(.*?)</answer>", solution_str, re.DOTALL)
     if matches:
-        final_answer = matches[-1].strip()
+        if len(matches) == 1:
+            # This is bad, as we put an example pair of answer tags in the prompt, so it means it didn't produce answer tags.
+            return None
+        return matches[-1].strip()
     else:
-        final_answer = None
-    return final_answer
+        return None
 
 
 def compute_score(
@@ -46,7 +48,7 @@ def compute_score(
             print(f"Correct answer: {answer}")
         return score
 
-    if answer is not None and re.match(r'^(\d\s)*\d$', answer):
+    if answer is not None and re.match(r"^(\d\s)*\d$", answer):
         if do_print:
             print(f"Wrong answer: {answer}")
         return format_score
@@ -55,6 +57,7 @@ def compute_score(
         print(f"Wrong format")
 
     return 0
+
 
 # No time to write real tests hrrr
 if __name__ == "__main__":
