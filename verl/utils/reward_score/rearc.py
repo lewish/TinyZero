@@ -48,10 +48,22 @@ def compute_score(
             print(f"Correct answer!")
         return score
 
+    answer_lines = answer.split("\n")
+    ground_truth_lines = ground_truth.split("\n")
+
+    if len(answer_lines) == len(ground_truth_lines) and all(
+        len(a.split()) == len(g.split())
+        for a, g in zip(answer_lines, ground_truth_lines)
+    ):
+        if do_print:
+            print(f"Correct grid size, wrong answer!")
+        return format_score
+
     if answer is not None and re.match(r"^(\d\s)*\d$", answer):
         if do_print:
             print(f"Wrong answer!")
-        return format_score
+        # Try to reduce rewards for just putting out consistent values.
+        return format_score / 10
 
     if do_print:
         print(f"Wrong format!")
