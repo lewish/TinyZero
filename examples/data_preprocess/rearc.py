@@ -23,6 +23,9 @@ parser.add_argument(
 parser.add_argument(
     "--output_yaml", type=bool, default=False, help="Output datasets to YAML files"
 )
+parser.add_argument(
+    "--max_prompt_size", type=int, default=8192, help="Maximum size of the prompt"
+)
 args = parser.parse_args()
 
 random.seed(42)
@@ -125,6 +128,8 @@ for json_file in json_files:
             }
             problems.append(task_to_text_pair(problem))
 
+# Filter problems based on the maximum prompt size
+problems = [problem for problem in problems if len(problem["prompt"]) < args.max_prompt_size]
 
 def convert_to_dataset(problems: List[dict], split: str) -> List[dict]:
     data_source = "rearc"
